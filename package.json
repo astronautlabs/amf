@@ -1,0 +1,23 @@
+{
+  "name": "@astronautlabs/amf",
+  "version": "0.0.1",
+  "description": "Action Message Format (AMF0/3)",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "npm run build && node dist/test"
+  },
+  "author": "Astronaut Labs, LLC",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chai": "^4.3.0",
+    "@types/node": "^17.0.10",
+    "chai": "^4.3.4",
+    "razmin": "^1.1.7"
+  },
+  "dependencies": {
+    "@astronautlabs/bitstream": "^3.0.0",
+    "reflect-metadata": "^0.1.13",
+    "source-map-support": "^0.5.21"
+  }
+}
