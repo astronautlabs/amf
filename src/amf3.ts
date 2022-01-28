@@ -1,4 +1,4 @@
-import { BitstreamElement, BitstreamReader, BitstreamWriter, DefaultVariant, Field, FieldDefinition, Serializer, Variant } from "@astronautlabs/bitstream";
+import { BitstreamElement, BitstreamReader, BitstreamWriter, DefaultVariant, Field, FieldDefinition, Serializer, Variant, VariantMarker } from "@astronautlabs/bitstream";
 import { U29Serializer } from "./u29";
 
 
@@ -22,6 +22,21 @@ export enum TypeMarker {
     VectorObject = 0x10,
     Dictionary = 0x11
 }
+
+export const REFERENCE_TYPES = [
+    TypeMarker.XmlDocument,
+    TypeMarker.Date,
+    TypeMarker.Array,
+    TypeMarker.Object,
+    TypeMarker.Xml,
+    TypeMarker.ByteArray,
+    TypeMarker.VectorDouble,
+    TypeMarker.VectorInt,
+    TypeMarker.VectorUint,
+    TypeMarker.VectorObject,
+    TypeMarker.Dictionary,
+    TypeMarker.String
+];
 
 export function Type(type : Function) : PropertyDecorator {
     return (target, propertyKey) => {
@@ -71,12 +86,21 @@ export function amfTypeForValue(value): Constructor<Value> {
         return ObjectValue;
 }
 
+export class References {
+    strings : StringValue[] = [];
+    traits : Traits[] = [];
+    values : Value[] = [];
+}
+
 /**
  * Represents an AMF3 "Value" in the binary protocol
  */
  export class Value<T = any> extends BitstreamElement {
-
-    private objectTraits : Traits[] = [];
+    get references(): References {
+        if (!this.context.__references)
+            this.context.__references = new References();
+        return this.context.__references;
+    }
 
     @Field(8*1) marker : TypeMarker;
 
@@ -160,7 +184,7 @@ export function amfTypeForValue(value): Constructor<Value> {
     static object(object : object, keys? : string[]) {
         keys ??= Object.keys(object).filter(key => typeof object[key] === 'function');
 
-        return new ObjectValueWithTraits().with({
+        return new ObjectValueWithLiteralTraits().with({
             traits: new Traits().with({ 
                 className: new StringOrReference().with({ value: '' }),
                 sealedMemberNames: keys.map(x => new StringOrReference().with({ value: x }))
@@ -175,11 +199,11 @@ export function amfTypeForValue(value): Constructor<Value> {
         });
     }
 
-    static vector(value : Int32Array | Uint32Array | number[]) {
+    static vector(value : Int32Array | Uint32Array | number[], isFixed = false) {
         if (value instanceof Int32Array)
-            return new IntVectorValue().with({ value });
+            return new IntVectorValue().with({ value, isFixed });
         if (value instanceof Uint32Array)
-            return new UIntVectorValue().with({ value });
+            return new UIntVectorValue().with({ value, isFixed });
         if (Array.isArray(value)) {
             if (value.some(x => typeof x !== 'number')) {
                 throw new TypeError(
@@ -189,43 +213,47 @@ export function amfTypeForValue(value): Constructor<Value> {
                 );
             }
 
-            return new DoubleVectorValue().with({ value });
+            return new DoubleVectorValue().with({ value, isFixed });
         }
 
         throw new TypeError(`The passed value cannot be converted to an Int32, Uint32 or Double AMF3 vector!`);
     }
 
-    static objectVector(values : any[]) {
-        return new ObjectVectorValue().with({ values: values.map(x => Value.any(x)) });
+    static objectVector(values : any[], isFixed = false) {
+        return new ObjectVectorValue().with({ values: values.map(x => Value.any(x)), isFixed });
     }
 
     static dictionary<K, V>(map : Map<K, V>): DictionaryValue<K, V> {
         return new DictionaryValue<K, V>().with({ value: map });
     }
 }
-
 @Variant<Value>(i => i.marker === TypeMarker.Undefined)
 export class UndefinedValue extends Value<undefined> {
+    marker = TypeMarker.Undefined;
     get value() { return undefined; }
 }
 
 @Variant<Value>(i => i.marker === TypeMarker.Null)
 export class NullValue extends Value<null> {
+    marker = TypeMarker.Null;
     get value() { return null; }
 }
 
 @Variant<Value>(i => i.marker === TypeMarker.False)
 export class FalseValue extends Value<false> {
+    marker = TypeMarker.False;
     get value() { return <false>false; }
 }
 
 @Variant<Value>(i => i.marker === TypeMarker.True)
 export class TrueValue extends Value<true> {
+    marker = TypeMarker.True;
     get value() { return <true>true; }
 }
 
 @Variant<Value>(i => i.marker === TypeMarker.Integer)
 export class IntegerValue extends Value<number> {
+    marker = TypeMarker.Integer;
     @Field(0, { serializer: new U29Serializer() })
     $value : number;
 
@@ -235,6 +263,7 @@ export class IntegerValue extends Value<number> {
 
 @Variant<Value>(i => i.marker === TypeMarker.Double)
 export class DoubleValue extends Value<number> {
+    marker = TypeMarker.Double;
     @Field(8*8, { number: { format: 'float' } })
     $value : number;
 
@@ -273,6 +302,11 @@ export class StringOrReference extends BitstreamElement {
     }
 }
 
+@Variant<Value>(i => REFERENCE_TYPES.includes(i.marker))
+export class ReferenceValue<T> extends Value<T> {
+    
+}
+
 /**
  * Represents the "String" type of "Value" in Adobe's ActionScript Message Format (AMF) version 3.
  * - U29Serializer: Encodes/decodes values in AMF3's custom variable-length integer format
@@ -285,7 +319,8 @@ export class StringOrReference extends BitstreamElement {
  * `value` return `undefined` when they are not relevant for this object.
  */
 @Variant<Value>(i => [TypeMarker.String, TypeMarker.XmlDocument, TypeMarker.Xml].includes(i.marker))
-export class StringValue extends Value<string> {
+export class StringValue extends ReferenceValue<string> {
+    marker = TypeMarker.String;
     @Field() stringOrReference : StringOrReference = new StringOrReference();
 
     get isLiteral() { return this.stringOrReference.isLiteral; }
@@ -297,15 +332,23 @@ export class StringValue extends Value<string> {
 }
 
 @Variant<StringValue>(i => i.marker === TypeMarker.XmlDocument)
-export class XmlDocumentValue extends StringValue { }
+export class XmlDocumentValue extends StringValue { 
+    marker = TypeMarker.XmlDocument;
+}
 
 @Variant<StringValue>(i => i.marker === TypeMarker.Xml)
-export class XmlValue extends StringValue { }
+export class XmlValue extends StringValue {
+    marker = TypeMarker.Xml;
+}
 
 @Variant<Value>(i => i.marker === TypeMarker.Date)
-export class DateValue extends Value<Date> {
+export class DateValue extends ReferenceValue<Date> {
+    marker = TypeMarker.Date;
+
     @Field(0, { serializer: new U29Serializer() }) 
-    isLiteral : boolean;
+    $indicator : number = 0x1;
+
+    get isLiteral() { return this.$indicator !== 0; }
     get isReference() { return !this.isLiteral; }
 
     @Field(8*8, { number: { format: 'float' }, presentWhen: i => i.isLiteral })
@@ -355,8 +398,19 @@ export class AssociativeValueSerializer implements Serializer {
     }
 }
 
+export class AssociativeValue extends BitstreamElement {
+    @Field() private $key : StringOrReference;
+
+    get key() { return this.$key.value; }
+    set key(value) { this.$key.value = value; }
+
+    @Field(0, { presentWhen: i => i.key !== '' }) value : Value;
+}
+
 @Variant<Value>(i => i.marker === TypeMarker.Array)
-export class ArrayValue extends Value<Date> {
+export class ArrayValue<T = any> extends ReferenceValue<T[]> {
+    marker = TypeMarker.Array;
+
     @Field(0, { serializer: new U29Serializer(), writtenValue: (i : ArrayValue) => i.isLiteral ? ((i.values.length << 1) | 0x1) : (i.id << 1) })
     private $denseLengthOrReference : number;
 
@@ -382,24 +436,25 @@ export class ArrayValue extends Value<Date> {
             return this.values?.length ?? this.$denseLengthOrReference >> 1;
     }
 
-    @Field(0, { serializer: new AssociativeValueSerializer() })
+    @Field(0, { array: { type: AssociativeValue }, serializer: new AssociativeValueSerializer() })
     associativeValues : AssociativeValue[] = [];
 
     @Field(i => i.denseLength, { array: { type: Value }})
-    values : Value[];
-}
+    private $values : Value[];
 
-export class AssociativeValue extends BitstreamElement {
-    @Field() private $key : StringOrReference;
+    get values() {
+        return this.$values;
+    }
 
-    get key() { return this.$key.value; }
-    set key(value) { this.$key.value = value; }
-
-    @Field(0, { presentWhen: i => i.key !== '' }) value : Value;
+    set values(value) {
+        this.$values = value;
+        this.$denseLengthOrReference = value.length << 1 | 0x1;
+    }
 }
 
 @Variant<Value>(i => i.marker === TypeMarker.Object)
-export class ObjectValue extends Value<object> {
+export class ObjectValue extends ReferenceValue<object> {
+    marker = TypeMarker.Object;
     @Field(0, { serializer: new U29Serializer() }) $objectTypeIndicator : number;
 
     get isReference() {
@@ -433,22 +488,42 @@ export class ObjectValue extends Value<object> {
     static reference(id : number) {
         return new ObjectValue().with({ id });
     }
+
+    @VariantMarker() $variantMarker;
+    
+    @Field(0, { 
+        array: { 
+            type: AssociativeValue,
+            hasMore: (i : ObjectValue) => 
+                i.dynamicMembers.length === 0 
+                || i.dynamicMembers[i.dynamicMembers.length - 1].key !== ''
+        },
+        presentWhen: i => i.isDynamic, serializer: new AssociativeValueSerializer()
+    })
+    dynamicMembers : AssociativeValue[] = [];
+
+    @Field((i : ObjectValueWithLiteralTraits) => i.traits.sealedMemberNames.length, { array: { type: Value }})
+    values : Value[] = [];
 }
 
 export class Traits extends BitstreamElement {
     @Field() className : StringOrReference;
-    @Field((i : ObjectValueWithTraits) => i.sealedMemberNameCount, { array: { type: String } }) 
+    @Field((i : Traits) => i.parent.as(ObjectValueWithLiteralTraits).sealedMemberNameCount, { array: { type: StringOrReference } }) 
     sealedMemberNames : StringOrReference[] = [];
 
     get isDynamic() {
-        if (!(this.parent instanceof ObjectValueWithTraits))
-            throw new TypeError(`Traits class can only be used as part of ObjectValueWithTraits`);
-        return (this.parent as ObjectValueWithTraits).isDynamic;
+        return this.parent.as(ObjectValueWithLiteralTraits).isDynamic;
     }
 }
 
+
 @Variant<ObjectValue>(i => !i.isExternalizable)
-export class ObjectValueWithTraits extends ObjectValue {
+export class ObjectValueWithInternalTraits extends ObjectValue {
+    get traits() : Traits { return undefined; }
+}
+
+@Variant<ObjectValue>(i => !i.isExternalizable && i.isTraitLiteral)
+export class ObjectValueWithLiteralTraits extends ObjectValueWithInternalTraits {
     get isDynamic() { return (this.$objectTypeIndicator & 0x8) === 0x8; }
     set isDynamic(value) { 
         if (value)
@@ -461,13 +536,38 @@ export class ObjectValueWithTraits extends ObjectValue {
         return this.$objectTypeIndicator & 0x1ffffff0;
     }
 
-    @Field() traits : Traits;
-    
-    @Field(0, { presentWhen: i => i.isDynamic, serializer: new AssociativeValueSerializer() }) 
-    dynamicMembers : AssociativeValue[] = [];
+    @Field() private $traits : Traits;
 
-    @Field()
-    values : Value[] = [];
+    get traits() {
+        return this.$traits;
+    }
+
+    set traits(value) {
+        this.$traits = value;
+    }
+}
+
+@Variant<ObjectValue>(i => !i.isExternalizable && i.isTraitReference)
+export class ObjectValueWithReferencedTraits extends ObjectValueWithInternalTraits {
+    get traitsId() {
+        return this.$objectTypeIndicator & 0x7ffffff;
+    }
+
+    set traitsId(id : number) {
+        this.$objectTypeIndicator &= 0x18000000;
+        this.$objectTypeIndicator |= (id & 0x7ffffff);
+    }
+
+    get traits() {
+        return this.references.traits[this.traitsId];
+    }
+
+    set traits(value) {
+        let index = this.references.traits.indexOf(value);
+        if (index < 0)
+            throw new Error(`The traits value ${value.toJSON()} is not in the traits index.`);
+        this.traitsId = index;
+    }
 }
 
 @Variant<ObjectValue>(i => i.isExternalizable)
@@ -483,13 +583,10 @@ export class ObjectValueWithUnknownExternalizableTraits extends ObjectValueWithE
     }
 }
 
-@Variant<ObjectValue>(i => !i.isExternalizable)
-export class TraitObjectValue extends ObjectValue {
-}
+@Variant<Value>(i => i.marker === TypeMarker.ByteArray)
+export class ByteArray extends ReferenceValue<Buffer> {
+    marker = TypeMarker.ByteArray;
 
-
-@Variant<Value>(i => i.marker === TypeMarker.Integer)
-export class ByteArray extends Value<Buffer> {
     @Field(0, { serializer: new U29Serializer(), writtenValue: i => i.value.length })
     private $lengthOrReference : number;
 
@@ -516,10 +613,74 @@ export class ByteArray extends Value<Buffer> {
     set value(value) { this.$value = value; this.$lengthOrReference = value.length << 1 | 0x1 };
 }
 
+function int32ArrayToBytes(array : Int32Array) {
+    let buf = new Uint8Array(array.length * array.BYTES_PER_ELEMENT);
+    let view = new DataView(buf.buffer);
+
+    for (let i = 0, max = array.length; i < max; ++i) {
+        view.setInt32(i*array.BYTES_PER_ELEMENT, array[i], false);
+    }
+
+    return buf;
+}
+
+function uint32ArrayToBytes(array : Uint32Array) {
+    let buf = new Uint8Array(array.length * array.BYTES_PER_ELEMENT);
+    let view = new DataView(buf.buffer);
+
+    for (let i = 0, max = array.length; i < max; ++i)
+        view.setUint32(i*array.BYTES_PER_ELEMENT, array[i], false);
+
+    return buf;
+}
+
+function doubleArrayToBytes(array : number[]) {
+    let buf = new Uint8Array(array.length * 8);
+    let view = new DataView(buf.buffer);
+
+    for (let i = 0, max = array.length; i < max; ++i)
+        view.setFloat64(i*8, array[i], false);
+}
+
+function bytesToInt32Array(array : Uint8Array) {
+    if (!array)
+        return undefined;
+    
+    let buf = new Int32Array(array.length / 4);
+    let view = new DataView(array.buffer);
+
+    for (let i = 0, max = buf.length; i < max; ++i) {
+        buf[i] = view.getInt32(i*buf.BYTES_PER_ELEMENT, false);
+    }
+
+    return buf;
+}
+
+function bytesToUint32Array(array : Uint8Array) {
+    let buf = new Uint32Array(array.length / 4);
+    let view = new DataView(array.buffer);
+
+    for (let i = 0, max = buf.length; i < max; ++i)
+        buf[i] = view.getUint32(i*buf.BYTES_PER_ELEMENT, false);
+
+    return buf;
+}
+
+function bytesToDoubleArray(array : Uint8Array) {
+    let buf = [];
+    let view = new DataView(array.buffer);
+
+    for (let i = 0, max = array.length / 8; i < max; ++i)
+        buf[i] = view.getFloat64(i*8, false);
+
+    return buf;
+}
+
 @Variant<Value>(i => [TypeMarker.VectorDouble, TypeMarker.VectorInt, TypeMarker.VectorObject, TypeMarker.VectorUint].includes(i.marker))
-export class VectorValue<T = any> extends Value<T> {
+export class VectorValue<T = any> extends ReferenceValue<T> {
+
     @Field(0, { serializer: new U29Serializer(), writtenValue: i => i.value.length })
-    private $lengthOrReference : number;
+    protected $lengthOrReference : number;
 
     get isReference() {
         return !this.isLiteral;
@@ -543,45 +704,75 @@ export class VectorValue<T = any> extends Value<T> {
 
     @Field(8, { presentWhen: i => i.isLiteral })
     isFixed : boolean = true;
+}
+
+@Variant<VectorValue>(i => i.marker === TypeMarker.VectorObject)
+export class ObjectVectorValue extends VectorValue<object> {
+    marker = TypeMarker.VectorObject;
+    @Field(i => i.length, { array: { type: Value }})
+    values : Value[];
+
+    get value() { return this.values; }
+    set value(value) { this.values = value; this.$lengthOrReference = value.length << 1 | 0x1; }
 
     @Field() 
     objectTypeName : StringOrReference;
 }
 
-@Variant<VectorValue>(i => i.marker === TypeMarker.VectorObject)
-export class ObjectVectorValue extends VectorValue<object> {
-    @Field(i => i.length, { array: { type: Value }})
-    values : Value[];
-
-    get value() { return this.values; }
-    set value(value) { this.values = value; }
-}
-
 @Variant<VectorValue>(i => i.marker === TypeMarker.VectorDouble)
 export class DoubleVectorValue extends VectorValue<number[]> {
-    @Field(i => i.length, { array: { type: Number, elementLength: 8*2 }, number: { format: 'float' } })
+    marker = TypeMarker.VectorDouble;
+    @Field(i => i.length, { array: { type: Number, elementLength: 8*4 }, number: { format: 'float' } })
     values : number[];
 
     get value() { return this.values; }
-    set value(value) { this.values = value; }
+    set value(value) { this.values = value; this.$lengthOrReference = value.length << 1 | 0x1; }
 }
 
 @Variant<VectorValue>(i => [TypeMarker.VectorInt, TypeMarker.VectorUint].includes(i.marker))
 export class IntVectorValue extends VectorValue<Int32Array> {
-    @Field(i => i.length)
-    $value : Uint8Array;
+    marker = TypeMarker.VectorInt;
 
-    get value() { return new Int32Array(this.$value); }
-    set value(value) { this.$value = new Uint8Array(value); }
+    private _bytes : Uint8Array;
+    private _elements : Int32Array;
+
+    @Field(i => i.length * 8 * 4)
+    get bytes(): Uint8Array { return this._bytes; }
+    set bytes(value) { 
+        this._bytes = value; 
+        this._elements = bytesToInt32Array(value);
+        this.$lengthOrReference = this._elements.length << 1 | 0x1; 
+    }
+
+    get value() { return this._elements; }
+    set value(value) { 
+        this._elements = value;
+        this._bytes = int32ArrayToBytes(value);
+        this.$lengthOrReference = value.length << 1 | 0x1; 
+    }
 }
 
 @Variant<VectorValue>(i => i.marker === TypeMarker.VectorUint)
 export class UIntVectorValue extends VectorValue<Uint32Array> {
-    @Field(i => i.length)
-    $value : Uint8Array;
+    marker = TypeMarker.VectorUint;
 
-    get value() { return new Uint32Array(this.$value); }
-    set value(value) { this.$value = new Uint8Array(value); }
+    private _bytes : Uint8Array;
+    private _elements : Uint32Array;
+
+    @Field(i => i.length * 8 * 4)
+    get bytes() { return this._bytes; }
+    set bytes(value) { 
+        this._bytes = value; 
+        this._elements = bytesToUint32Array(value);
+        this.$lengthOrReference = value.length << 1 | 0x1; 
+    }
+
+    get value() { return this._elements; }
+    set value(value) { 
+        this._elements = value;
+        this._bytes = uint32ArrayToBytes(value);
+        this.$lengthOrReference = value.length << 1 | 0x1; 
+    }
 }
 
 export class DictionaryEntry extends BitstreamElement {
@@ -590,7 +781,8 @@ export class DictionaryEntry extends BitstreamElement {
 }
 
 @Variant<Value>(i => i.marker === TypeMarker.Dictionary)
-export class DictionaryValue<K = any, V = any> extends Value<Map<K,V>> {
+export class DictionaryValue<K = any, V = any> extends ReferenceValue<Map<K,V>> {
+    marker = TypeMarker.Dictionary;
     @Field(0, { serializer: new U29Serializer(), writtenValue: i => i.value.length })
     private $lengthOrReference : number;
 
