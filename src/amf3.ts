@@ -729,7 +729,7 @@ export class DoubleVectorValue extends VectorValue<number[]> {
     set value(value) { this.values = value; this.$lengthOrReference = value.length << 1 | 0x1; }
 }
 
-@Variant<VectorValue>(i => [TypeMarker.VectorInt, TypeMarker.VectorUint].includes(i.marker))
+@Variant<VectorValue>(i => i.marker === TypeMarker.VectorInt)
 export class IntVectorValue extends VectorValue<Int32Array> {
     marker = TypeMarker.VectorInt;
 
@@ -760,18 +760,18 @@ export class UIntVectorValue extends VectorValue<Uint32Array> {
     private _elements : Uint32Array;
 
     @Field(i => i.length * 8 * 4)
-    get bytes() { return this._bytes; }
+    get bytes(): Uint8Array { return this._bytes; }
     set bytes(value) { 
         this._bytes = value; 
         this._elements = bytesToUint32Array(value);
-        this.$lengthOrReference = value.length << 1 | 0x1; 
+        this.$lengthOrReference = this._elements.length << 1 | 0x1; 
     }
 
     get value() { return this._elements; }
     set value(value) { 
         this._elements = value;
         this._bytes = uint32ArrayToBytes(value);
-        this.$lengthOrReference = value.length << 1 | 0x1; 
+        this.$lengthOrReference = this._elements.length << 1 | 0x1; 
     }
 }
 

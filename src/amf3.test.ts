@@ -25,7 +25,9 @@ describe('amf3', it => {
         'array-of-3-nulls': Value.array([ Value.null, Value.null, Value.null ]),
         'array-of-3-integers': Value.array([ Value.int(3), Value.int(2), Value.int(1) ]),
         'vector-of-3-integers': Value.vector(Int32Array.from([ 1, 2, 3 ])),
-        'fixed-vector-of-3-integers': Value.vector(Int32Array.from([ 1, 2, 3 ]), true)
+        'vector-of-3-integers-2': Value.vector(Int32Array.from([ -5, 2, 3 ])),
+        'fixed-vector-of-3-integers': Value.vector(Int32Array.from([ 1, 2, 3 ]), true),
+        'vector-of-3-unsigned-integers': Value.vector(Uint32Array.from([ 1, 2, 3 ])),
     };
 
     let files = Object.keys(samples);
