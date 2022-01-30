@@ -27,7 +27,7 @@ describe('amf3', it => {
         'string.340':                    Value.string('0gl7klwtsOHw8B7fNFHzHzkwb1TEiWDEjN1XK06qxUvwcgVAF61Xy73CBs8ghWW9JXbIo8hLHau78n03jad3h8cv3iQuk5Bopx9t1hHXk2vV1nqmuYWdfR2FPAw01J0GV8ey5CLzPc8zdtrCAsO7J7Zqtlah5Annaykwro3ETENETlJDTNsJguArA2g0EqZ1gFH8EptbB1qeCoMHcHS8VT4FplWTOwgwCmGx6SubMKZ8alfpufz3nPjzCFtsdqdmP1gpW0PSP8cnz64e4ZzLiJsG8s8HiBVW4656NIPQRZFLvXHSF8pmvis5m3rVTISHooegzwvwKXiZKwrqykYx'),
         'xml-document.340':              Value.xmlDocument('0gl7klwtsOHw8B7fNFHzHzkwb1TEiWDEjN1XK06qxUvwcgVAF61Xy73CBs8ghWW9JXbIo8hLHau78n03jad3h8cv3iQuk5Bopx9t1hHXk2vV1nqmuYWdfR2FPAw01J0GV8ey5CLzPc8zdtrCAsO7J7Zqtlah5Annaykwro3ETENETlJDTNsJguArA2g0EqZ1gFH8EptbB1qeCoMHcHS8VT4FplWTOwgwCmGx6SubMKZ8alfpufz3nPjzCFtsdqdmP1gpW0PSP8cnz64e4ZzLiJsG8s8HiBVW4656NIPQRZFLvXHSF8pmvis5m3rVTISHooegzwvwKXiZKwrqykYx'),
         'xml.340':                       Value.xml('0gl7klwtsOHw8B7fNFHzHzkwb1TEiWDEjN1XK06qxUvwcgVAF61Xy73CBs8ghWW9JXbIo8hLHau78n03jad3h8cv3iQuk5Bopx9t1hHXk2vV1nqmuYWdfR2FPAw01J0GV8ey5CLzPc8zdtrCAsO7J7Zqtlah5Annaykwro3ETENETlJDTNsJguArA2g0EqZ1gFH8EptbB1qeCoMHcHS8VT4FplWTOwgwCmGx6SubMKZ8alfpufz3nPjzCFtsdqdmP1gpW0PSP8cnz64e4ZzLiJsG8s8HiBVW4656NIPQRZFLvXHSF8pmvis5m3rVTISHooegzwvwKXiZKwrqykYx'),
-        'date':                          Value.date(new Date('2020-03-01 12:23:34')),
+        'date':                          Value.date(new Date('2020-03-01T20:23:34.000Z')),
         'array-of-3-falses':             Value.array([ Value.boolean(false), Value.boolean(false), Value.boolean(false) ]),
         'array-of-3-trues':              Value.array([ Value.boolean(true), Value.boolean(true), Value.boolean(true) ]),
         'array-of-3-nulls':              Value.array([ Value.null, Value.null, Value.null ]),
