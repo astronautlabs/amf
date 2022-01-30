@@ -24,13 +24,20 @@ commands:
       - store_artifacts:
           path: coverage
 jobs:
-  node-15:
+  node-17:
     docker:
-      - image: circleci/node:15
+      - image: circleci/node:17
     working_directory: ~/repo
     steps:
       - run_tests:
-          version: "15"
+          version: "17"
+  node-16:
+    docker:
+      - image: circleci/node:16
+    working_directory: ~/repo
+    steps:
+      - run_tests:
+          version: "16"
   node-14:
     docker:
       - image: circleci/node:14
@@ -38,13 +45,6 @@ jobs:
     steps:
       - run_tests:
           version: "14"
-  node-12:
-    docker:
-      - image: circleci/node:12
-    working_directory: ~/repo
-    steps:
-      - run_tests:
-          version: "12"
 
 workflows:
   version: 2
