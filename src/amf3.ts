@@ -1,6 +1,7 @@
-import { BitstreamElement, BitstreamReader, BitstreamWriter, DefaultVariant, Field, FieldDefinition, Serializer, Variant, VariantMarker } from "@astronautlabs/bitstream";
+import { BitstreamElement, BitstreamReader, BitstreamWriter, DefaultVariant, Field, FieldDefinition, Marker, Serializer, Variant, VariantMarker } from "@astronautlabs/bitstream";
 import { U29Serializer } from "./u29";
 
+// 00100011
 
 export enum TypeMarker {
     Undefined = 0x00,
@@ -47,12 +48,20 @@ export function Type(type : Function) : PropertyDecorator {
 export function amfTypeForProperty(object : any, propertyKey : string): Constructor<Value> {
     let value = object[propertyKey];
 
-    let declared = Reflect.getMetadata('amf:type', object.prototype);
-
-    if (declared)
-        return declared;
+    if (object.prototype) {
+        let declared = Reflect.getMetadata('amf:type', object.prototype);
+        if (declared)
+            return declared;
+    }
 
     return amfTypeForValue(value);
+}
+
+export function amfValueForProperty(object : any, propertyKey : string): Value {
+    if (object[propertyKey] instanceof Value)
+        return object[propertyKey];
+    
+    return new (amfTypeForProperty(object, propertyKey))().with({ value: object[propertyKey] });
 }
 
 export type Constructor<T> = { new() : T };
@@ -83,7 +92,7 @@ export function amfTypeForValue(value): Constructor<Value> {
     if (Array.isArray(value))
         return ArrayValue;
     if (typeof value === 'object')
-        return ObjectValue;
+        return ObjectValueWithLiteralTraits;
 }
 
 export class References {
@@ -100,8 +109,8 @@ export class References {
         if (!this.context.__references)
             this.context.__references = new References();
         return this.context.__references;
-    }
-
+    }    
+    
     @Field(8*1) marker : TypeMarker;
 
     get value() : T { return undefined; }
@@ -181,16 +190,8 @@ export class References {
         });
     }
 
-    static object(object : object, keys? : string[]) {
-        keys ??= Object.keys(object).filter(key => typeof object[key] === 'function');
-
-        return new ObjectValueWithLiteralTraits().with({
-            traits: new Traits().with({ 
-                className: new StringOrReference().with({ value: '' }),
-                sealedMemberNames: keys.map(x => new StringOrReference().with({ value: x }))
-            }),
-            values: keys.map(key => new (amfTypeForProperty(object, key))().with({ value: object[key] }))
-        });
+    static object(object : object) {
+        return new ObjectValueWithLiteralTraits().with({ value: object });
     }
 
     static byteArray(buffer : Uint8Array | Buffer) {
@@ -452,8 +453,33 @@ export class ArrayValue<T = any> extends ReferenceValue<T[]> {
     }
 }
 
+export class ClassRegistry {
+    private _map = new Map<string, Function>();
+
+    register(klass : Function, name? : string) {
+        this._map.set(name ?? klass.name, klass);
+    }
+
+    get(name : string) {
+        return this._map.get(name);
+    }
+}
+
 @Variant<Value>(i => i.marker === TypeMarker.Object)
 export class ObjectValue extends ReferenceValue<object> {
+    
+    get registry(): ClassRegistry {
+
+        // So this happens when creating the value outside of parsing.
+        // TODO: Not clear this is the best behavior
+        if (!this.context)
+            return new ClassRegistry();
+        
+        if (!this.context.__classes)
+            this.context.__classes = new ClassRegistry();
+        return this.context.__classes;
+    }
+
     marker = TypeMarker.Object;
     @Field(0, { serializer: new U29Serializer() }) $objectTypeIndicator : number;
 
@@ -500,10 +526,20 @@ export class ObjectValue extends ReferenceValue<object> {
         },
         presentWhen: i => i.isDynamic, serializer: new AssociativeValueSerializer()
     })
-    dynamicMembers : AssociativeValue[] = [];
+    private _dynamicMembers : AssociativeValue[] = [];
 
-    @Field((i : ObjectValueWithLiteralTraits) => i.traits.sealedMemberNames.length, { array: { type: Value }})
-    values : Value[] = [];
+    get dynamicMembers() { return this._dynamicMembers; }
+    set dynamicMembers(value) { this._dynamicMembers = value; }
+
+    @Field((i : ObjectValueWithInternalTraits) => i.traits.sealedMemberNames.length, { array: { type: Value }})
+    private _values : Value[] = [];
+
+    get values() { return this._values; }
+    set values(value) { 
+        if (value === undefined || value === null)
+            throw new TypeError(`Value cannot be set to undefined/null`);
+        this._values = value; 
+    }
 }
 
 export class Traits extends BitstreamElement {
@@ -519,11 +555,66 @@ export class Traits extends BitstreamElement {
 
 @Variant<ObjectValue>(i => !i.isExternalizable)
 export class ObjectValueWithInternalTraits extends ObjectValue {
+    $objectTypeIndicator = 0b001;
     get traits() : Traits { return undefined; }
+
+    private _value : object;
+
+    get value() {
+        return this._value;
+    }
+
+    set value(value) {
+        this._value = value;
+    }
+    
+    set values(value) {
+        if (value === undefined || value === null)
+            throw new TypeError(`Cannot assign null/undefined to ObjectValueWithInternalTraits.values`);
+        super.values = value;
+        this.buildValue();
+    }
+
+    set dynamicMembers(value: AssociativeValue[]) {
+        super.dynamicMembers = value;
+        this.buildValue();
+    }
+
+    protected buildValue() {
+        console.log(`buildValue()`);
+        if (!this.traits) {
+            console.log(`buildValue() -> bail`);
+            console.dir(this.values);
+            console.dir(this.traits);
+            return;
+        }
+
+        let values = this.values ?? [];
+        console.log(`buildValue() -> continue 1`);
+
+        let obj : any;
+        let klass : any = this.registry.get(this.traits.className.value);
+
+        if (klass) {
+            obj = new klass()
+        } else {
+            obj = {};
+        }
+
+        this._value = this.traits.sealedMemberNames.reduce((o, name, i) => (o[name.value] = values[i]?.value, o), obj);
+        if (this.dynamicMembers)
+            this.dynamicMembers.forEach(m => this._value[m.key] = m.value);
+    }
+
+    onParseFinished(): void {
+        console.log(`building value post parse`);
+        this.buildValue();
+    }
 }
 
-@Variant<ObjectValue>(i => !i.isExternalizable && i.isTraitLiteral)
+@Variant<ObjectValue>(i => i.isTraitLiteral)
 export class ObjectValueWithLiteralTraits extends ObjectValueWithInternalTraits {
+    $objectTypeIndicator = 0b011;
     get isDynamic() { return (this.$objectTypeIndicator & 0x8) === 0x8; }
     set isDynamic(value) { 
         if (value)
@@ -533,7 +624,12 @@ export class ObjectValueWithLiteralTraits extends ObjectValueWithInternalTraits 
     }
 
     get sealedMemberNameCount() {
-        return this.$objectTypeIndicator & 0x1ffffff0;
+        return (this.$objectTypeIndicator & 0x1ffffff0) >>> 4;
+    }
+
+    set sealedMemberNameCount(value) {
+        this.$objectTypeIndicator &= 0xF;
+        this.$objectTypeIndicator |= (value << 4);
     }
 
     @Field() private $traits : Traits;
@@ -544,11 +640,26 @@ export class ObjectValueWithLiteralTraits extends ObjectValueWithInternalTraits 
 
     set traits(value) {
         this.$traits = value;
+        this.buildValue();
+    }
+
+    set value(value) {
+        console.log(`adopting value`);
+        let keys = Object.keys(value);
+        this.traits = new Traits().with({
+            className: new StringOrReference().with({ value: '' }),
+            sealedMemberNames: keys.map(x => new StringOrReference().with({ value: x }))
+        });
+        this.sealedMemberNameCount = keys.length;
+        this.values = keys.map(key => amfValueForProperty(value, key));
+        console.log(`building value after adoption`);
+        this.buildValue();
     }
 }
 
-@Variant<ObjectValue>(i => !i.isExternalizable && i.isTraitReference)
+@Variant<ObjectValue>(i => i.isTraitReference)
 export class ObjectValueWithReferencedTraits extends ObjectValueWithInternalTraits {
+    $objectTypeIndicator = 0b001;
     get traitsId() {
         return this.$objectTypeIndicator & 0x7ffffff;
     }
@@ -572,6 +683,7 @@ export class ObjectValueWithReferencedTraits extends ObjectValueWithInternalTrai
 
 @Variant<ObjectValue>(i => i.isExternalizable)
 export class ObjectValueWithExternalizableTraits extends ObjectValue {
+    $objectTypeIndicator = 0b111;
     @Field() className : StringOrReference;
 }
 
@@ -761,7 +873,7 @@ export class UIntVectorValue extends VectorValue<Uint32Array> {
 
     @Field(i => i.length * 8 * 4)
     get bytes(): Uint8Array { return this._bytes; }
-    set bytes(value) { 
+    set bytes(value) {
         this._bytes = value; 
         this._elements = bytesToUint32Array(value);
         this.$lengthOrReference = this._elements.length << 1 | 0x1; 
