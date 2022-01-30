@@ -1,0 +1,85 @@
+{
+    "marker": 10,
+    "$objectTypeIndicator": 35,
+    "$traits": {
+        "className": {
+            "$lengthOrReference": 1,
+            "$value": ""
+        },
+        "sealedMemberNames": [
+            {
+                "$lengthOrReference": 3,
+                "$value": "a"
+            },
+            {
+                "$lengthOrReference": 3,
+                "$value": "b"
+            }
+        ]
+    },
+    "_dynamicMembers": [],
+    "_values": [
+        {
+            "marker": 10,
+            "$objectTypeIndicator": 35,
+            "$traits": {
+                "className": {
+                    "$lengthOrReference": 1,
+                    "$value": ""
+                },
+                "sealedMemberNames": [
+                    {
+                        "$lengthOrReference": 13,
+                        "$value": "marker"
+                    },
+                    {
+                        "$lengthOrReference": 13,
+                        "$value": "$value"
+                    }
+                ]
+            },
+            "_dynamicMembers": [],
+            "_values": [
+                {
+                    "marker": 5,
+                    "$value": 4
+                },
+                {
+                    "marker": 5,
+                    "$value": 3
+                }
+            ]
+        },
+        {
+            "marker": 10,
+            "$objectTypeIndicator": 35,
+            "$traits": {
+                "className": {
+                    "$lengthOrReference": 1,
+                    "$value": ""
+                },
+                "sealedMemberNames": [
+                    {
+                        "$lengthOrReference": 13,
+                        "$value": "marker"
+                    },
+                    {
+                        "$lengthOrReference": 13,
+                        "$value": "$value"
+                    }
+                ]
+            },
+            "_dynamicMembers": [],
+            "_values": [
+                {
+                    "marker": 5,
+                    "$value": 4
+                },
+                {
+                    "marker": 5,
+                    "$value": 7
+                }
+            ]
+        }
+    ]
+}
