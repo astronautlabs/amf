@@ -1,4 +1,5 @@
-import { BitstreamElement, Field, Variant, Serializer, BitstreamReader, BitstreamWriter, FieldDefinition, resolveLength, BufferedWritable, BooleanSerializer, Reserved } from "@astronautlabs/bitstream";
+import { BitstreamElement, Field, Variant, Serializer, BitstreamReader, BitstreamWriter, FieldDefinition, resolveLength, BufferedWritable, BooleanSerializer, Reserved, SerializeOptions, ReservedLow, BitstreamMeasurer, VariantMarker } from "@astronautlabs/bitstream";
+import * as AMF3 from './amf3';
 
 export enum TypeMarker {
     Number = 0x00,
@@ -8,7 +9,7 @@ export enum TypeMarker {
     MovieClip = 0x04,
     Null = 0x05,
     Undefined = 0x06,
-    Reference = 0x07,
+    Reference = 0x07, // x
     EcmaArray = 0x08,
     ObjectEnd = 0x09,
     StrictArray = 0x0A,
@@ -17,11 +18,29 @@ export enum TypeMarker {
     Unsupported = 0x0D,
     RecordSet = 0x0E,
     XmlDocument = 0x0F,
-    TypedObject = 0x10,
-    AvmPlus = 0x11
+    TypedObject = 0x10, // x
+    AvmPlus = 0x11      // x
 }
 
+
 export class Value<T = any> extends BitstreamElement {
+
+    private _referenceTable : ComplexValue[];
+
+    get referenceTable() {
+        if (!this._referenceTable) {
+            if (this.context) {
+                if (this.context.__references) { 
+                    this._referenceTable = this.context.__references;
+                } else {
+                    this.context.__references = this._referenceTable = [];
+                }
+            }
+        }
+
+        return this._referenceTable;
+    }
+
     @Field(8*1) marker : TypeMarker;
 
     get value(): T { return undefined; }
@@ -56,8 +75,15 @@ export class Value<T = any> extends BitstreamElement {
             return new StringValue().with({ value });
     }
 
-    static object(value : object) {
-        return new ObjectValue().with({ value });
+    static xmlDocument(value : string) {
+        return new XmlDocumentValue().with({ value });
+    }
+
+    static object(value : object, className? : string) {
+        if (className)
+            return new TypedObjectValue().with({ value, className });
+        else
+            return new ObjectValue().with({ value });
     }
 
     static get null() {
@@ -100,6 +126,14 @@ export class Value<T = any> extends BitstreamElement {
             return this.array(value);
         if (typeof value === 'object')
             return this.object(value);
+    }
+
+    static avmPlus(value) {
+        return new AvmPlusValue().with({ value });
+    }
+
+    static amf3(value) {
+        return this.avmPlus(value);
     }
 }
 export class ObjectProperty extends BitstreamElement {
@@ -191,10 +225,41 @@ export class StringValue extends Value {
     }
 }
 
-@Variant<Value>(i => i.marker === TypeMarker.Object)
-export class ObjectValue extends Value {
+@Variant<Value>(i => [TypeMarker.Object, TypeMarker.TypedObject, TypeMarker.StrictArray, TypeMarker.EcmaArray].includes(i.marker))
+export class ComplexValue<T = any> extends Value<T> {
+    write(bitstream: BitstreamWriter, options?: SerializeOptions): void {
+        this.context = options?.context ?? {};
+
+        let json = JSON.stringify(this);
+        if (!this.context.id)
+            this.context.id = Math.floor(Math.random() * 1000);
+        let index = this.referenceTable?.findIndex?.(x => JSON.stringify(x) === json);
+
+        if (index >= 0) {
+            new ReferenceValue().with({ index }).write(bitstream, options);
+        } else {
+            super.write(bitstream, options);
+        }
+    }
+
+    onSerializeFinished(): void {
+        this.referenceTable.push(this);
+    }
+
+    onParseFinished(): void {
+        this.referenceTable.push(this);
+    }
+}
+
+function symbol(): symbol {
+    return Symbol('');
+}
+@Variant<Value>(i => [TypeMarker.Object, TypeMarker.TypedObject].includes(i.marker))
+export class ObjectValue extends ComplexValue {
     marker = TypeMarker.Object;
     private _properties : ObjectProperty[];
+
+    @VariantMarker() $objectVariantMarker;
 
     @Field(0, { 
         array: { type: ObjectProperty }, 
@@ -225,6 +290,27 @@ export class ObjectValue extends Value {
     }
 }
 
+@Variant<ObjectValue>(i => i.marker === TypeMarker.TypedObject)
+export class TypedObjectValue extends ObjectValue {
+    marker = TypeMarker.TypedObject;
+    
+    private _className : string;
+
+    @Field(8*2, { writtenValue: (i : TypedObjectValue) => Buffer.from(i.className).length }) classNameLength : number;
+    @Field((i : TypedObjectValue) => i.classNameLength, { string: { encoding: 'utf-8' }}) 
+    get className() : string { 
+        return this._className; 
+    }
+
+    set className(value) {
+        if (typeof value !== 'string')
+            throw new TypeError(`Class name must be a string`);
+
+        this._className = value;
+        this.classNameLength = value.length;
+    }
+}
+
 @Variant<Value>(i => i.marker === TypeMarker.Null)
 export class NullValue extends Value<null> {
     marker = TypeMarker.Null;
@@ -239,10 +325,18 @@ export class UndefinedValue extends Value<undefined> {
 export class ReferenceValue extends Value {
     marker = TypeMarker.Reference;
     @Field(8*2) index : number;
+
+    get reference() {
+        return this.referenceTable?.[this.index];
+    }
+
+    get value() {
+        return this.reference?.value;
+    }
 }
 
 @Variant<Value>(i => i.marker === TypeMarker.EcmaArray)
-export class EcmaArrayValue<V = any> extends Value<Map<string, V>> {
+export class EcmaArrayValue<V = any> extends ComplexValue<Map<string, V>> {
     marker = TypeMarker.EcmaArray;
 
     @Field(8*4, { writtenValue: (i : EcmaArrayValue) => i._properties.length }) 
@@ -278,7 +372,7 @@ export class ObjectEndValue extends Value {
 }
 
 @Variant<Value>(i => i.marker === TypeMarker.StrictArray)
-export class StrictArrayValue<T = any> extends Value<T[]> {
+export class StrictArrayValue<T = any> extends ComplexValue<T[]> {
     marker = TypeMarker.StrictArray;
 
     private _value : T[];
@@ -299,6 +393,10 @@ export class StrictArrayValue<T = any> extends Value<T[]> {
         return this._value;
     }
 
+    static elementValues(value : StrictArrayValue) {
+        return value.values;
+    }
+    
     set value(value) {
         if (!Array.isArray(value))
             throw new Error(`Value must be an array`);
@@ -323,7 +421,7 @@ export class DateValue extends Value<Date> {
         this._value = Math.floor(value);
     }
 
-    @Reserved(8*2, { writtenValue: 0x0000 }) private timeZone : number;
+    @ReservedLow(8*2, { writtenValue: 0x0000 }) private timeZone : number;
 
     get value() {
         return new Date(this.$value);
@@ -337,11 +435,18 @@ export class DateValue extends Value<Date> {
 @Variant<Value>(i => i.marker === TypeMarker.LongString)
 export class LongStringValue extends Value {
     marker = TypeMarker.LongString;
-    @Field(8*4, { writtenValue: (i : StringValue) => Buffer.from(i.value).length }) length : number;
-    @Field(i => i.length, { string: { encoding: 'utf-8' }}) private $value : string;
+    @Field(8*4, { writtenValue: (i : StringValue) => Buffer.from(i.value).length }) 
+    private _length : number;
+
+    @Field((i : LongStringValue) => i._length, { string: { encoding: 'utf-8' }}) private $value : string;
 
     get value() { return this.$value; }
-    set value(value) { this.$value = value; }
+    set value(value) { 
+        if (typeof value !== 'string')
+            throw new TypeError(`Value must be a string`);
+        this.$value = value; 
+        this._length = value.length; 
+    }
 }
 
 @Variant<Value>(i => i.marker === TypeMarker.Unsupported)
@@ -363,17 +468,36 @@ export class MovieClipValue extends Value {
 export class XmlDocumentValue extends Value {
     marker = TypeMarker.XmlDocument;
 
-    @Field(8*4, { writtenValue: (i : StringValue) => Buffer.from(i.value).length }) length : number;
-    @Field(i => i.length, { string: { encoding: 'utf-8' }}) private $value : string;
+    @Field(8*4, { writtenValue: (i : StringValue) => Buffer.from(i.value).length }) 
+    private _length : number;
+
+    @Field((i : XmlDocumentValue) => i._length, { string: { encoding: 'utf-8' }}) private $value : string;
 
     get value() { return this.$value; }
-    set value(value) { this.$value = value; }
+    set value(value) { 
+        if (typeof value !== 'string')
+            throw new TypeError(`Value must be a string`);
+        this.$value = value; 
+        this._length = value.length; 
+    }
 }
 
-@Variant<Value>(i => i.marker === TypeMarker.TypedObject)
-export class TypedObjectValue extends Value {
-    marker = TypeMarker.TypedObject;
-    @Field(8*2, { writtenValue: (i : TypedObjectValue) => Buffer.from(i.className).length }) classNameLength : number;
-    @Field((i : TypedObjectValue) => i.classNameLength, { string: { encoding: 'utf-8' }}) className : string;
-    @Field(0, { array: { type: ObjectProperty }, serializer: new ObjectPropertyArraySerializer() }) properties : ObjectProperty[];
+@Variant<Value>(i => i.marker === TypeMarker.AvmPlus)
+export class AvmPlusValue extends Value {
+    marker = TypeMarker.AvmPlus;
+
+    @Field()
+    private $value : AMF3.Value;
+
+    get value() {
+        return this.$value?.value;
+    }
+
+    set value(value) {
+        this.$value = AMF3.Value.any(value);
+    }
+
+    static unwrap(v : AvmPlusValue) {
+        return v.$value;
+    }
 }

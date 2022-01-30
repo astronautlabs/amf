@@ -16,7 +16,7 @@
     "razmin": "^1.1.7"
   },
   "dependencies": {
-    "@astronautlabs/bitstream": "^3.0.0",
+    "@astronautlabs/bitstream": "^3.0.3",
     "reflect-metadata": "^0.1.13",
     "source-map-support": "^0.5.21"
   }

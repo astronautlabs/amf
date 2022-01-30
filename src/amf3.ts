@@ -538,6 +538,7 @@ export class ObjectValue extends ReferenceValue<object> {
     set values(value) { 
         if (value === undefined || value === null)
             throw new TypeError(`Value cannot be set to undefined/null`);
+
         this._values = value; 
     }
 }
@@ -568,6 +569,10 @@ export class ObjectValueWithInternalTraits extends ObjectValue {
         this._value = value;
     }
     
+    get values() {
+        return super.values;
+    }
+
     set values(value) {
         if (value === undefined || value === null)
             throw new TypeError(`Cannot assign null/undefined to ObjectValueWithInternalTraits.values`);
@@ -581,16 +586,11 @@ export class ObjectValueWithInternalTraits extends ObjectValue {
     }
 
     protected buildValue() {
-        console.log(`buildValue()`);
         if (!this.traits) {
-            console.log(`buildValue() -> bail`);
-            console.dir(this.values);
-            console.dir(this.traits);
             return;
         }
 
         let values = this.values ?? [];
-        console.log(`buildValue() -> continue 1`);
 
         let obj : any;
         let klass : any = this.registry.get(this.traits.className.value);
@@ -602,12 +602,12 @@ export class ObjectValueWithInternalTraits extends ObjectValue {
         }
 
         this._value = this.traits.sealedMemberNames.reduce((o, name, i) => (o[name.value] = values[i]?.value, o), obj);
+
         if (this.dynamicMembers)
             this.dynamicMembers.forEach(m => this._value[m.key] = m.value);
     }
 
     onParseFinished(): void {
-        console.log(`building value post parse`);
         this.buildValue();
     }
 }
@@ -643,16 +643,19 @@ export class ObjectValueWithLiteralTraits extends ObjectValueWithInternalTraits 
         this.buildValue();
     }
 
+    get value() {
+        return super.value;
+    }
+
     set value(value) {
-        console.log(`adopting value`);
         let keys = Object.keys(value);
         this.traits = new Traits().with({
             className: new StringOrReference().with({ value: '' }),
             sealedMemberNames: keys.map(x => new StringOrReference().with({ value: x }))
         });
         this.sealedMemberNameCount = keys.length;
-        this.values = keys.map(key => amfValueForProperty(value, key));
-        console.log(`building value after adoption`);
+        let encoded = keys.map(key => amfValueForProperty(value, key));
+        this.values = encoded;
         this.buildValue();
     }
 }
