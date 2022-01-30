@@ -30,7 +30,8 @@
     "razmin": "^1.1.7",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
-    "source-map-support": "^0.5.21"
+    "source-map-support": "^0.5.21",
+    "typescript": "^4.5.5"
   },
   "dependencies": {
     "@astronautlabs/bitstream": "^3.0.3"
