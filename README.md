@@ -1,7 +1,6 @@
 # @/amf
 
-> ⚠ **Work in Progress**  
-> This library is incomplete and should not be relied upon. It is expected to have numerous
-> bugs and is not suitable for even the bravest of users.
+> 📝 **Alpha Quality**
+> This library is new, no compatibility is currently guaranteed between releases (beta, semver 0.0.x).
 
 ActionScript Message Format v0/v3
