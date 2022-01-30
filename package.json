@@ -31,7 +31,8 @@
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "source-map-support": "^0.5.21",
-    "typescript": "^4.5.5"
+    "typescript": "^4.5.5",
+    "zone.js": "^0.11.4"
   },
   "dependencies": {
     "@astronautlabs/bitstream": "^3.0.3"
