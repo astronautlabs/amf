@@ -190,8 +190,8 @@ export class References {
         });
     }
 
-    static object(object : object) {
-        return new ObjectValueWithLiteralTraits().with({ value: object });
+    static object(value : object) {
+        return new ObjectValueWithLiteralTraits().with({ value });
     }
 
     static byteArray(buffer : Uint8Array | Buffer) {
