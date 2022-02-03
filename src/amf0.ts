@@ -80,6 +80,9 @@ export class Value<T = any> extends BitstreamElement {
     }
 
     static object(value : object, className? : string) {
+        if (value === null || value === void 0 || typeof value !== 'object')
+            throw new Error(`Invalid value for object: ${value}`);
+
         if (className)
             return new TypedObjectValue().with({ value, className });
         else
@@ -286,7 +289,12 @@ export class ObjectValue extends ComplexValue {
 
     set value(value) {
         this._value = value;
-        this._properties = Object.keys(value).map(key => (new ObjectProperty().with({ key, value: Value.any(value[key]) })));
+        this._properties = Object
+            .keys(value ?? {})
+            .map(key => new ObjectProperty().with({ 
+                key,
+                value: Value.any(value[key])
+            }));
     }
 }
 
