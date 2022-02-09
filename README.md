@@ -6,14 +6,11 @@
 > **[📜 Adobe AMF version 3](https://www.adobe.com/content/dam/acom/en/devnet/pdf/amf-file-format-spec.pdf)**  
 > Adobe’s Action Message Format v3
 
-> 📺 Part of the **Astronaut Labs Broadcast Suite**  
-> [@/is04](https://github.com/astronautlabs/is04) |
-> [@/rfc8331](https://github.com/astronautlabs/rfc8331) |
-> [@/rtp](https://github.com/astronautlabs/rtp) |
-> [@/scte104](https://github.com/astronautlabs/scte104) | 
-> [@/scte35](https://github.com/astronautlabs/scte35) | 
-> [@/st2010](https://github.com/astronautlabs/st2010) | 
-> [@/st291](https://github.com/astronautlabs/st291)
+> 📺 Part of the [**Astronaut Labs Broadcast Suite**](https://github.com/astronautlabs/broadcast)
+>
+> See also:
+> - [@/rtmp](https://github.com/astronautlabs/rtmp) - Adobe's Real Time Messaging Protocol (RTMP)
+> - [@/flv](https://github.com/astronautlabs/flv) - Adobe's Flash Video format (FLV)
 
 > 📝 **Alpha Quality**  
 > This library is new, no compatibility is currently guaranteed between 
