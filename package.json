@@ -38,6 +38,6 @@
     "zone.js": "^0.11.4"
   },
   "dependencies": {
-    "@astronautlabs/bitstream": "^3.0.3"
+    "@astronautlabs/bitstream": "^3.1.1"
   }
 }
