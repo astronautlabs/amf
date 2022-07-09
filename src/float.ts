@@ -1,7 +1,7 @@
-import { BitstreamElement, BitstreamReader, BitstreamWriter, FieldDefinition, resolveLength, Serializer } from "@astronautlabs/bitstream";
+import { BitstreamElement, BitstreamReader, BitstreamWriter, FieldDefinition, IncompleteReadResult, resolveLength, Serializer } from "@astronautlabs/bitstream";
 
 export class FloatSerializer implements Serializer {
-    *read(reader: BitstreamReader, type: any, parent: BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type: any, parent: BitstreamElement, field: FieldDefinition): Generator<IncompleteReadResult, any> {
         let length : number;
         try {
             length = resolveLength(field.length, parent, field);
@@ -10,7 +10,7 @@ export class FloatSerializer implements Serializer {
         }
         
         if (!reader.isAvailable(length))
-            yield length;
+            yield { remaining: length };
         
         if (length === 8) {
             return Buffer.from([ reader.readSync(8) ]).readFloatBE();

@@ -1,4 +1,4 @@
-import { BitstreamElement, Field, Variant, Serializer, BitstreamReader, BitstreamWriter, FieldDefinition, resolveLength, BufferedWritable, BooleanSerializer, Reserved, SerializeOptions, ReservedLow, BitstreamMeasurer, VariantMarker } from "@astronautlabs/bitstream";
+import { BitstreamElement, Field, Variant, Serializer, BitstreamReader, BitstreamWriter, FieldDefinition, resolveLength, BufferedWritable, BooleanSerializer, Reserved, SerializeOptions, ReservedLow, BitstreamMeasurer, VariantMarker, IncompleteReadResult } from "@astronautlabs/bitstream";
 import * as AMF3 from './amf3';
 
 export enum TypeMarker {
@@ -157,10 +157,10 @@ export class ObjectProperty extends BitstreamElement {
 }
 
 export class ObjectPropertyArraySerializer implements Serializer {
-    *read(reader: BitstreamReader, type: any, parent: BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type: any, parent: BitstreamElement, field: FieldDefinition): Generator<IncompleteReadResult, any> {
         let properties : ObjectProperty[] = [];
 
-        let readOperation : Generator<number, ObjectProperty>;
+        let readOperation : Generator<IncompleteReadResult, ObjectProperty>;
         let hasMore = true;
 
         while (hasMore) {

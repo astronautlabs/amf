@@ -1,23 +1,23 @@
-import { BitstreamElement, BitstreamReader, BitstreamWriter, FieldDefinition, Serializer } from "@astronautlabs/bitstream";
+import { BitstreamElement, BitstreamReader, BitstreamWriter, FieldDefinition, IncompleteReadResult, Serializer } from "@astronautlabs/bitstream";
 
 export class U29Serializer implements Serializer {
-    *read(reader: BitstreamReader, type: any, parent: BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type: any, parent: BitstreamElement, field: FieldDefinition): Generator<IncompleteReadResult, any> {
         if (!reader.isAvailable(8))
-            yield 8;
+            yield { remaining: 8 };
         
         let byte1 = reader.readSync(8);
 
         if ((byte1 & 0x80) !== 0) {
             if (!reader.isAvailable(8))
-                yield 8;
+                yield { remaining: 8 };
             let byte2 = reader.readSync(8);
             if ((byte2 & 0x80) !== 0) {
                 if (!reader.isAvailable(8))
-                    yield 8;
+                    yield { remaining: 8 };
                 let byte3 = reader.readSync(8);
                 if((byte3 & 0x80) !== 0) {
                     if (!reader.isAvailable(8))
-                        yield 8;
+                        yield { remaining: 8 };
                     let byte4 = reader.readSync(8);
                     
                     return ((byte1 & 0x7f) << 21) | ((byte2 & 0x7f) << 14) | ((byte3 & 0x7f) << 7) | byte4;

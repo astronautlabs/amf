@@ -167,5 +167,8 @@ describe("amf0", it => {
             expect(bool4).to.be.an.instanceOf(BooleanValue);
             
         });
+        it.only('accepts an object with an array and creates correct AMF objects', () => {
+            let amf = Value.any({ foo: [ 'bar', 'baz' ]});
+        })
     });
 });
