@@ -125,6 +125,8 @@ export class Value<T = any> extends BitstreamElement {
             return this.string(value);
         if (value instanceof Date)
             return this.date(value);
+        if (value instanceof Map)
+            return this.associativeArray(value);
         if (Array.isArray(value))
             return this.array(value);
         if (typeof value === 'object')
