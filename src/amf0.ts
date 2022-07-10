@@ -359,6 +359,13 @@ export class EcmaArrayValue<V = any> extends ComplexValue<Map<string, V>> {
         return this._properties;
     }
 
+    
+    @Field((i : ObjectProperty) => 0, { string: { encoding: 'utf-8' }, writtenValue: '' })
+    #endKey = '';
+
+    @Field(8, { writtenValue: TypeMarker.ObjectEnd })
+    #endMarker = TypeMarker.ObjectEnd;
+
     private set properties(value) {
         this._properties = value;
         this._value = new Map(value.map(prop => [prop.key, prop.value.value]));
