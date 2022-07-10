@@ -1,9 +1,9 @@
 # @/amf
 
-> **[📜 Adobe AMF version 0](https://wwwimages2.adobe.com/content/dam/acom/en/devnet/pdf/amf0-file-format-specification.pdf)**  
+> **[📜 Adobe AMF version 0](https://rtmp.veriskope.com/pdf/amf0-file-format-specification.pdf)**  
 > Adobe's Action Message Format v0
 
-> **[📜 Adobe AMF version 3](https://www.adobe.com/content/dam/acom/en/devnet/pdf/amf-file-format-spec.pdf)**  
+> **[📜 Adobe AMF version 3](https://rtmp.veriskope.com/pdf/amf3-file-format-spec.pdf)**  
 > Adobe’s Action Message Format v3
 
 > 📺 Part of the [**Astronaut Labs Broadcast Suite**](https://github.com/astronautlabs/broadcast)
